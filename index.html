@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>8-Bit Ninja Wall Runner</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #222;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+    }
+    #game-container {
+      position: relative;
+      width: 800px;
+      height: 600px;
+      background-color: #111;
+      overflow: hidden;
+    }
+    canvas {
+      display: block;
+      background-color: #000;
+    }
+    #start-screen,
+    #game-over {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      z-index: 10;
+    }
+    #game-over {
+      display: none;
+    }
+    button {
+      background-color: #4CAF50;
+      border: none;
+      color: white;
+      padding: 15px 32px;
+      font-size: 16px;
+      margin: 20px 2px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+    }
+    #score-display,
+    #high-score-display {
+      position: absolute;
+      color: white;
+      font-size: 20px;
+      top: 10px;
+      padding: 5px;
+      background-color: rgba(0, 0, 0, 0.5);
+      border-radius: 5px;
+      z-index: 5;
+    }
+    #score-display {
+      left: 10px;
+    }
+    #high-score-display {
+      right: 10px;
+    }
+    .ninja-animation {
+      animation: flipNinja 0.4s ease;
+    }
+    @keyframes flipNinja {
+      0% {
+        transform: scale(1) rotateY(0deg);
+        filter: brightness(1);
+      }
+      50% {
+        transform: scale(1.2) rotateY(180deg);
+        filter: brightness(1.5);
+      }
+      100% {
+        transform: scale(1) rotateY(360deg);
+        filter: brightness(1);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas" width="800" height="600"></canvas>
+    <div id="score-display">Score: 0</div>
+    <div id="high-score-display">High Score: 0</div>
+    <div id="start-screen">
+      <h1>8-Bit Ninja Wall Runner</h1>
+      <p>Press SPACE to switch walls and avoid obstacles</p>
+      <p>Collect coins for points!</p>
+      <button id="start-button">START GAME</button>
+    </div>
+    <div id="game-over">
+      <h1>GAME OVER</h1>
+      <p id="final-score">Your score: 0</p>
+      <p id="high-score">High score: 0</p>
+      <button id="restart-button">PLAY AGAIN</button>
+    </div>
+  </div>
+
+    <script>
+        // Game variables
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over');
+        const startButton = document.getElementById('start-button');
+        const restartButton = document.getElementById('restart-button');
+        const scoreDisplay = document.getElementById('score-display');
+        const highScoreDisplay = document.getElementById('high-score-display');
+        const finalScoreDisplay = document.getElementById('final-score');
+        const highScoreTextDisplay = document.getElementById('high-score');
+        
+        let gameRunning = false;
+        let gameSpeed = 5;
+        let score = 0;
+        let highScore = 0;
+        let frames = 0;
+        
+        // Load high score from local storage if available
+        if (localStorage.getItem('ninjaHighScore')) {
+            highScore = parseInt(localStorage.getItem('ninjaHighScore'));
+            highScoreDisplay.textContent = `High Score: ${highScore}`;
+        }
+
+        
+        
+        // Game objects
+        const ninja = {
+            x: 100,
+            y: canvas.height / 2,
+            width: 32,
+            height: 48,
+            onLeftWall: true,
+            ping: false,
+            jumpSpeed: 0,
+            update: function() {
+                if (this.jumping) {
+                    // Moving to the other wall
+                    this.jumpSpeed -= 0.5;
+                    this.x += this.jumpSpeed;
+                    
+                    // Check if reached the other wall
+                    if ((this.onLeftWall && this.x >= canvas.width - 150) || 
+                        (!this.onLeftWall && this.x <= 100)) {
+                        this.jumping = false;
+                        this.onLeftWall = !this.onLeftWall;
+                        this.x = this.onLeftWall ? 100 : canvas.width - 150;
+                    }
+                } else {
+                    // Running on the current wall
+                    this.x = this.onLeftWall ? 100 : canvas.width - 150;
+                }
+            },
+            draw: function() {
+                // Draw ninja character (8-bit style)
+                ctx.fillStyle = '#000';
+                ctx.fillRect(this.x - 1, this.y - 1, this.width + 2, this.height + 2);
+                
+                ctx.fillStyle = '#333';
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                
+                // Ninja details
+                ctx.fillStyle = '#555';
+                // Head
+                ctx.fillRect(this.x + 8, this.y + 2, 16, 16);
+                // Body
+                ctx.fillStyle = '#222';
+                ctx.fillRect(this.x + 8, this.y + 18, 16, 16);
+                
+                // Eyes
+                ctx.fillStyle = 'white';
+                ctx.fillRect(this.x + 16, this.y + 8, 4, 4);
+                
+                // Limbs
+                ctx.fillStyle = '#444';
+                // Arms
+                ctx.fillRect(this.x + 4, this.y + 18, 4, 12);
+                ctx.fillRect(this.x + 24, this.y + 18, 4, 12);
+                
+                // Legs
+                ctx.fillRect(this.x + 8, this.y + 34, 6, 12);
+                ctx.fillRect(this.x + 18, this.y + 34, 6, 12);
+                
+                // Ninja scarf - changes direction based on wall
+                ctx.fillStyle = 'red';
+                if (this.onLeftWall) {
+                    ctx.fillRect(this.x + 24, this.y + 10, 8, 4);
+                } else {
+                    ctx.fillRect(this.x, this.y + 10, 8, 4);
+                }
+            },
+                        update: function () {
+                // Stay fixed on wall (x position)
+                this.x = this.onLeftWall ? 100 : canvas.width - 150;
+            },
+            jump: function () {
+                // Instantly swap walls
+                this.onLeftWall = !this.onLeftWall;
+                this.x = this.onLeftWall ? 100 : canvas.width - 150;
+            },
+            collidesWith: function(object) {
+                return (
+                    this.x < object.x + object.width &&
+                    this.x + this.width > object.x &&
+                    this.y < object.y + object.height &&
+                    this.y + this.height > object.y
+                );
+            }
+        };
+        
+        // Obstacle types
+        const OBSTACLE_TYPES = {
+            AC_UNIT: {
+                width: 40,
+                height: 30,
+                color: '#888'
+            },
+            LAMP: {
+                width: 20,
+                height: 40,
+                color: '#FFFF00'
+            },
+            TORII_GATE: {
+                width: 60,
+                height: 80,
+                color: '#FF5555'
+            }
+        };
+        
+        let obstacles = [];
+        let coins = [];
+        
+        function createObstacle() {
+            const types = Object.keys(OBSTACLE_TYPES);
+            const type = types[Math.floor(Math.random() * types.length)];
+            const specs = OBSTACLE_TYPES[type];
+            
+            // Randomly select which wall to place the obstacle on
+            const onLeftWall = Math.random() > 0.5;
+            
+            obstacles.push({
+                x: onLeftWall ? 100 - specs.width/2 : canvas.width - 150 - specs.width/2,
+                y: canvas.height,
+                width: specs.width,
+                height: specs.height,
+                type: type,
+                onLeftWall: onLeftWall,
+                color: specs.color
+            });
+        }
+        
+        function createCoin() {
+            // Randomly select which wall to place the coin on
+            const onLeftWall = Math.random() > 0.5;
+            
+            coins.push({
+                x: onLeftWall ? 100 - 10 : canvas.width - 150 - 10,
+                y: canvas.height,
+                width: 20,
+                height: 20,
+                onLeftWall: onLeftWall
+            });
+        }
+        
+        function drawBuildings() {
+            // Draw buildings background
+            const buildingHeight = canvas.height;
+            
+            // Left building
+            ctx.fillStyle = '#444';
+            ctx.fillRect(0, 0, 150, buildingHeight);
+            
+            // Windows for left building
+            ctx.fillStyle = '#666';
+            for (let y = 50; y < buildingHeight; y += 100) {
+                for (let x = 20; x < 130; x += 40) {
+                    ctx.fillRect(x, y, 20, 30);
+                }
+            }
+            
+            // Right building
+            ctx.fillStyle = '#333';
+            ctx.fillRect(canvas.width - 150, 0, 150, buildingHeight);
+            
+            // Windows for right building
+            ctx.fillStyle = '#555';
+            for (let y = 50; y < buildingHeight; y += 100) {
+                for (let x = canvas.width - 130; x < canvas.width - 20; x += 40) {
+                    ctx.fillRect(x, y, 20, 30);
+                }
+            }
+            
+            // Background city skyline (simplified to fix performance)
+            ctx.fillStyle = '#222';
+            for (let i = 0; i < 10; i++) {
+                const buildWidth = 60 + (i * 7) % 40; // Deterministic width
+                const buildHeight = 100 + (i * 30) % 200; // Deterministic height
+                const x = 150 + i * 50;
+                ctx.fillRect(x, canvas.height - buildHeight, buildWidth, buildHeight);
+                
+                // Windows (simplified)
+                ctx.fillStyle = '#333';
+                for (let wy = canvas.height - buildHeight + 20; wy < canvas.height; wy += 30) {
+                    for (let wx = x + 10; wx < x + buildWidth - 10; wx += 20) {
+                        ctx.fillRect(wx, wy, 10, 15);
+                    }
+                }
+                ctx.fillStyle = '#222';
+            }
+        }
+        
+        function drawObstacles() {
+            obstacles.forEach(obstacle => {
+                ctx.fillStyle = obstacle.color;
+                ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+                
+                // Add details based on obstacle type
+                switch(obstacle.type) {
+                    case 'AC_UNIT':
+                        // AC unit details
+                        ctx.fillStyle = '#666';
+                        ctx.fillRect(obstacle.x + 5, obstacle.y + 5, obstacle.width - 10, obstacle.height - 10);
+                        ctx.fillStyle = '#222';
+                        // Vents
+                        for (let i = 0; i < 3; i++) {
+                            ctx.fillRect(obstacle.x + 10 + i * 8, obstacle.y + 10, 4, 10);
+                        }
+                        break;
+                        
+                    case 'LAMP':
+                        // Lamp details
+                        ctx.fillStyle = '#FFFFAA';
+                        ctx.fillRect(obstacle.x + 5, obstacle.y + 5, obstacle.width - 10, obstacle.width - 10);
+                        ctx.fillStyle = '#444';
+                        ctx.fillRect(obstacle.x + obstacle.width/2 - 2, obstacle.y + obstacle.width - 5, 4, obstacle.height - obstacle.width + 5);
+                        break;
+                        
+                    case 'TORII_GATE':
+                        // Torii gate details
+                        ctx.fillStyle = '#DD3333';
+                        // Top beam
+                        ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, 10);
+                        // Second beam
+                        ctx.fillRect(obstacle.x + 5, obstacle.y + 15, obstacle.width - 10, 8);
+                        // Posts
+                        ctx.fillRect(obstacle.x + 5, obstacle.y, 8, obstacle.height);
+                        ctx.fillRect(obstacle.x + obstacle.width - 13, obstacle.y, 8, obstacle.height);
+                        break;
+                }
+            });
+        }
+        
+        function drawCoins() {
+            coins.forEach(coin => {
+                // Draw coin
+                ctx.fillStyle = '#FFD700';
+                ctx.beginPath();
+                ctx.arc(coin.x + coin.width/2, coin.y + coin.height/2, coin.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Inner details
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.arc(coin.x + coin.width/2, coin.y + coin.height/2, coin.width/3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        function updateObstacles() {
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].y -= gameSpeed;
+                
+                // Remove obstacles that have gone off screen
+                if (obstacles[i].y + obstacles[i].height < 0) {
+                    obstacles.splice(i, 1);
+                    score += 10; // Score for successfully avoiding an obstacle
+                }
+            }
+        }
+        
+        function updateCoins() {
+            for (let i = coins.length - 1; i >= 0; i--) {
+                coins[i].y -= gameSpeed;
+                
+                // Check for coin collection
+                if (ninja.collidesWith(coins[i]) && ninja.onLeftWall === coins[i].onLeftWall) {
+                    coins.splice(i, 1);
+                    score += 50;
+                    // Play coin sound (if you want to add sound)
+                } else if (coins[i].y + coins[i].height < 0) {
+                    // Remove coins that have gone off screen
+                    coins.splice(i, 1);
+                }
+            }
+        }
+        
+        function checkCollisions() {
+            for (let i = 0; i < obstacles.length; i++) {
+                if (ninja.collidesWith(obstacles[i]) && ninja.onLeftWall === obstacles[i].onLeftWall) {
+                    gameOver();
+                    return;
+                }
+            }
+        }
+        
+        function updateGame() {
+            frames++;
+            
+            // Increase game speed gradually
+            if (frames % 500 === 0) {
+                gameSpeed += 0.5;
+            }
+            
+            // Generate obstacles
+            if (frames % 100 === 0) {
+                createObstacle();
+            }
+            
+            // Generate coins less frequently than obstacles
+            if (frames % 150 === 0) {
+                createCoin();
+            }
+            
+            // Update objects
+            ninja.update();
+            updateObstacles();
+            updateCoins();
+            
+            // Check for collisions
+            checkCollisions();
+            
+            // Update score display
+            scoreDisplay.textContent = `Score: ${score}`;
+            
+            // Draw everything
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw night sky background
+            ctx.fillStyle = '#003';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw a few stars (optimized)
+            ctx.fillStyle = '#FFF';
+            for (let i = 0; i < 20; i++) {
+                const x = (150 * i) % canvas.width;
+                const y = (50 * i + frames) % canvas.height;
+                ctx.fillRect(x, y, 2, 2);
+            }
+            
+            drawBuildings();
+            drawObstacles();
+            drawCoins();
+            ninja.draw();
+            
+            if (gameRunning) {
+                requestAnimationFrame(updateGame);
+            }
+        }
+        
+        function startGame() {
+            startScreen.style.display = 'none';
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            gameSpeed = 5;
+            score = 0;
+            frames = 0;
+            obstacles = [];
+            coins = [];
+            ninja.onLeftWall = true;
+            ninja.x = 100;
+            ninja.y = canvas.height / 2; // Important! This was missing
+            
+            scoreDisplay.textContent = `Score: ${score}`;
+            
+            // Critical: Init the first frame immediately
+            updateGame();
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            
+            // Update high score if needed
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('ninjaHighScore', highScore);
+            }
+            
+            // Update displays
+            finalScoreDisplay.textContent = `Your score: ${score}`;
+            highScoreTextDisplay.textContent = `High score: ${highScore}`;
+            highScoreDisplay.textContent = `High Score: ${highScore}`;
+            
+            // Show game over screen
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        // Event listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+        
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space') {
+                event.preventDefault();
+                if (gameRunning) {
+                    ninja.jump();
+                } else if (!startScreen.style.display || startScreen.style.display === 'flex') {
+                    startGame();
+                } else if (gameOverScreen.style.display === 'flex') {
+                    startGame();
+                }
+            }
+        });
+        
+        // Touch support for mobile
+        canvas.addEventListener('touchstart', function(event) {
+            event.preventDefault();
+            if (gameRunning) {
+                ninja.jump();
+            } else {
+                startGame();
+            }
+        });
+        
+        // Initial scene drawing
+        function init() {
+            // Draw night sky background
+            ctx.fillStyle = '#003';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            drawBuildings();
+            
+            // Init ninja position
+            ninja.y = canvas.height / 2;
+            ninja.draw();
+        }
+
+        const ninjaelement = document.querySelector('.ninja');
+
+        // Spacebar event
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    // Trigger wall switch logic
+    switchWalls();
+
+    // Add the sick animation
+    ninjaelement.classList.add('animate-flip');
+
+    // Remove the class after animation ends so we can reuse it
+    setTimeout(() => {
+        ninjaelement.classList.remove('animate-flip');
+    }, 400);
+  }
+});
+
+ninja.jump = function () {
+      this.onLeftWall = !this.onLeftWall;
+      this.x = this.onLeftWall ? 100 : canvas.width - 150;
+      const canvasEl = document.getElementById('game-canvas');
+      canvasEl.classList.remove('ninja-animation');
+      void canvasEl.offsetWidth; // trigger reflow
+      canvasEl.classList.add('ninja-animation');
+    };
+        
+        // Initialize the scene
+        init();
+    </script>
+</body>
+</html>
